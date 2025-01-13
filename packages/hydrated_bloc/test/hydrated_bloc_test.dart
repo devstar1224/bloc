@@ -101,6 +101,28 @@ class MyMultiHydratedBloc extends HydratedBloc<int, int> {
   int? fromJson(dynamic json) => json['value'] as int?;
 }
 
+class MyValidityPeriodHydratedBloc extends HydratedBloc<int, int> {
+  MyValidityPeriodHydratedBloc(String id)
+      : _id = id,
+        super(0);
+
+  final String _id;
+
+  @override
+  String get id => _id;
+
+  @override
+  Map<String, int> toJson(int state) {
+    return {'value': state};
+  }
+
+  @override
+  Duration? get hydrationExpiresIn => Duration(days: 1);
+
+  @override
+  int? fromJson(dynamic json) => json['value'] as int?;
+}
+
 class MyErrorThrowingBloc extends HydratedBloc<Object, int> {
   MyErrorThrowingBloc({this.onErrorCallback, this.superOnError = true})
       : super(0) {
@@ -558,6 +580,49 @@ void main() {
             () => storage.delete('MyHydratedBlocWithCustomStorage'),
           ).called(1);
         });
+      });
+    });
+
+    group("MyValidityPeriodHydratedBloc", () {
+      test("Check for data input before the expiration date", () async {
+        when<dynamic>(
+                () => storage.read('MyValidityPeriodHydratedBlocA-expireIn'))
+            .thenReturn(DateTime.now().microsecondsSinceEpoch);
+        final bloc = MyValidityPeriodHydratedBloc('A');
+        const change = Change(
+          currentState: 0,
+          nextState: 1,
+        );
+        const expected = <String, int>{'value': 1};
+        bloc.onChange(change);
+        verify(() => storage.write('MyValidityPeriodHydratedBlocA', expected))
+            .called(1);
+        expect(bloc.state, 1);
+
+        final newBloc = MyValidityPeriodHydratedBloc('A');
+        final blocState = newBloc.state;
+        expect(blocState, 1);
+
+        verify<dynamic>(
+                () => storage.read('MyValidityPeriodHydratedBlocA-expireIn'))
+            .called(2);
+        verify<dynamic>(() => storage.read('MyValidityPeriodHydratedBlocA'))
+            .called(2);
+      });
+
+      test("Check for data input before the expiration date", () {
+        final bloc = MyValidityPeriodHydratedBloc('A');
+        const change = Change(
+          currentState: 0,
+          nextState: 0,
+        );
+        const expected = <String, int>{'value': 0};
+        bloc.onChange(change);
+        verify(() => storage.write('MyValidityPeriodHydratedBlocA', expected))
+            .called(2);
+        verify(() =>
+                storage.write('MyValidityPeriodHydratedBlocA-expireIn', any()))
+            .called(2);
       });
     });
   });
